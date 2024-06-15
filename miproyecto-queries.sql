@@ -2,7 +2,7 @@
 select e.nombre_equipo, SUM(g.minuto) as goles_marcados
 from equipo e inner join fichajes f 
 on e.nombre_equipo = f.EQUIPO_nombre_equipo inner join jugador j 
-on f.JUGADOR_dni = j.dni inner join gol g 
+on f.JUGADOR_dni = j.dni left join gol g 
 on j.dni = g.jugador_marca
 group by e.nombre_equipo
 order by goles_marcados desc;
@@ -45,7 +45,7 @@ create view primera as
 	select e.nombre_equipo, SUM(g.minuto) as goles_marcados
 	from equipo e inner join fichajes f 
 	on e.nombre_equipo = f.EQUIPO_nombre_equipo inner join jugador j 
-	on f.JUGADOR_dni = j.dni inner join gol g 
+	on f.JUGADOR_dni = j.dni left join gol g 
 	on j.dni = g.jugador_marca
 	group by e.nombre_equipo
 	order by goles_marcados desc;
@@ -107,7 +107,8 @@ delimiter ;
 
 select numeroPartidosArbitrados(5);
 
--- 1. Procedimiento para seleccionar el nombre de los equipos, el nombre del entrenador y la cantidad de jugadores que tiene cada equipo
+-- 1. Procedimiento para seleccionar el nombre de los equipos, el nombre del entrenador y la cantidad 
+-- de jugadores que tiene cada equipo
 delimiter $$
 create procedure consultarEquipos()
 begin
@@ -173,7 +174,8 @@ delimiter ;
 
 call resumenEstadios();
 
--- 3. Procedimiento en el que se utiliza la funcion 'edadMediaEquipo' en el que se calcula la edad media del equipo que juega en el estadio que se recibe como parametro
+-- 3. Procedimiento en el que se utiliza la funcion 'edadMediaEquipo' en el que se calcula la 
+-- edad media del equipo que juega en el estadio que se recibe como parametro
 delimiter $$
 create procedure calcularEdadMediaEquipoEnEstadio(in nombre_estadio varchar(20))
 begin
@@ -192,38 +194,41 @@ delimiter ;
 
 call calcularEdadMediaEquipoEnEstadio('Benito Villamarín');
 
--- 1. Creamos un trigger que al actualizar un jugador, si ese jugador ha marcado o ha asistido un gol sera borrado de la tabla gol. 
+-- 1. Creamos un trigger en el que al insertar un jugador, si su nombre es nulo mandará un mensaje de error personalizado.
 delimiter $$
-
-create trigger tras_actualizar
-after update on jugador
+create trigger before_insert_jugador
+before insert on jugador
 for each row
 begin
-    delete from gol where jugador_marca = old.dni;
-   
-    delete from gol where jugador_asiste = old.dni;
-end $$
+	
+	if new.nombre is null then
+		signal sqlstate '45000' set message_text = 'Es obligatorio introducir el nombre del jugador';
+	end if;
 
+
+end $$
 delimiter ;
 
-UPDATE jugador
-SET nombre = 'Manolo', apellidos = 'Lopez', fecha_nacimiento = '2003-04-27', telefono = '1234567890'
-WHERE dni = '12345682K';
 
--- 2. Creamos un trigger en el que despues de insertar un estadio, esa inserccion se guarda en una nueva tabla (insertados)
-create table insertados (
-  nombre_estadio varchar(20) primary key,
-  ciudad varchar(20),
-  telefono varchar(10)
+insert into jugador (dni, nombre, apellidos, fecha_nacimiento, telefono)
+values ('43218401F', null, 'Sanchez', '2003-04-27', '123456789');
+
+
+-- 2. Creamos un trigger en el que antes de eliminar un estadio, esa eliminación se guarda 
+-- en una nueva tabla (insertados)
+create table eliminados (
+	nombre_estadio varchar(20) primary key,
+	ciudad varchar(20),
+	telefono varchar(10)
 );
 
 delimiter $$
-create trigger before_estadio_insert
-before insert on estadio
+create trigger before_estadio_delete
+before delete on estadio
 for each row
 begin
-    insert into insertados (nombre_estadio, ciudad, telefono) values (new.nombre_estadio, new.ciudad, new.telefono);
+	insert into eliminados (nombre_estadio, ciudad, telefono) values(old.nombre_estadio, old.ciudad, old.telefono);
 end $$
 delimiter ;
 
-insert into estadio (nombre_estadio, ciudad, telefono) values ('Principe de Asturia', 'Sanlucar la Mayor', '123456789');
+delete from estadio where nombre_estadio = 'Principe de Asturia';
